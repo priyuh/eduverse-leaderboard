@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './Leaderboard.css';
 
@@ -6,16 +6,31 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? '/api' 
   : 'http://localhost:5001/api';
 
-const Leaderboard = ({ challengeId }) => {
+const Leaderboard = ({ challengeId, onBack, refreshTrigger }) => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredLeaderboard, setFilteredLeaderboard] = useState([]);
+  const [deletingUser, setDeletingUser] = useState(null);
+
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_BASE_URL}/challenges/${challengeId}/leaderboard`);
+      setLeaderboard(response.data.leaderboard);
+      setError(null);
+    } catch (err) {
+      setError('Failed to fetch leaderboard data');
+      console.error('Error fetching leaderboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [challengeId]);
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [challengeId]);
+  }, [fetchLeaderboard, refreshTrigger]);
 
   useEffect(() => {
     // Filter leaderboard based on search term
@@ -30,23 +45,9 @@ const Leaderboard = ({ challengeId }) => {
     }
   }, [leaderboard, searchTerm]);
 
-  const fetchLeaderboard = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/challenges/${challengeId}/leaderboard`);
-      setLeaderboard(response.data.leaderboard);
-      setError(null);
-    } catch (err) {
-      setError('Failed to fetch leaderboard data');
-      console.error('Error fetching leaderboard:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const getRankIcon = (rank) => {
     if (rank === 1) return '🥇';
-    if (rank === 2) return '��';
+    if (rank === 2) return '🥈';
     if (rank === 3) return '🥉';
     return rank;
   };
@@ -54,6 +55,23 @@ const Leaderboard = ({ challengeId }) => {
   const getRankClass = (rank) => {
     if (rank <= 3) return 'top-three';
     return '';
+  };
+
+  const handleDeleteUser = async (userId, userName) => {
+    if (!window.confirm(`Are you sure you want to delete ${userName} (@${userId}) from the leaderboard? This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingUser(userId);
+    try {
+      await axios.delete(`${API_BASE_URL}/challenges/${challengeId}/users/${userId}`);
+      // Refresh the leaderboard after deletion
+      await fetchLeaderboard();
+    } catch (err) {
+      setError('Failed to delete user: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDeletingUser(null);
+    }
   };
 
   if (loading) {
@@ -78,7 +96,12 @@ const Leaderboard = ({ challengeId }) => {
   return (
     <div className="leaderboard-container">
       <div className="leaderboard-header">
-        <h2>Leaderboard - Challenge {challengeId}</h2>
+        <div className="header-top">
+          <button onClick={onBack} className="back-button">
+            ← Back to Home
+          </button>
+          <h2>Leaderboard - Challenge {challengeId}</h2>
+        </div>
         <div className="search-container">
           <input
             type="text"
@@ -100,6 +123,7 @@ const Leaderboard = ({ challengeId }) => {
           <div className="name-col">Name</div>
           <div className="score-col">Final Score</div>
           <div className="breakdown-col">Score Breakdown</div>
+          <div className="actions-col">Actions</div>
         </div>
 
         {filteredLeaderboard.length === 0 ? (
@@ -155,6 +179,16 @@ const Leaderboard = ({ challengeId }) => {
                     </div>
                   )}
                 </div>
+              </div>
+              <div className="actions-col">
+                <button
+                  onClick={() => handleDeleteUser(entry.user_id, entry.name)}
+                  disabled={deletingUser === entry.user_id}
+                  className="delete-user-button"
+                  title={`Delete ${entry.name}`}
+                >
+                  {deletingUser === entry.user_id ? '⏳' : '❌'}
+                </button>
               </div>
             </div>
           ))

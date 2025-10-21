@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Leaderboard from './components/Leaderboard';
+import ScoreSubmission from './components/ScoreSubmission';
+import ChallengeManagement from './components/ChallengeManagement';
 import './App.css';
 
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
@@ -9,26 +11,62 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
 
 function App() {
   const [challengeId, setChallengeId] = useState('demo-challenge-1');
-  const [challenges, setChallenges] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showDemoSetup, setShowDemoSetup] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [showChallengeManagement, setShowChallengeManagement] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [availableChallenges, setAvailableChallenges] = useState([]);
+  const [deletingChallenge, setDeletingChallenge] = useState(false);
 
-  useEffect(() => {
-    // Check if we have any data, if not show demo setup
-    checkForData();
+  const fetchAvailableChallenges = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/challenges`);
+      setAvailableChallenges(response.data.challenges || []);
+    } catch (err) {
+      console.error('Error fetching challenges:', err);
+      setAvailableChallenges([]);
+    }
   }, []);
 
-  const checkForData = async () => {
+  const checkForData = useCallback(async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/challenges/${challengeId}/leaderboard`);
       if (response.data.leaderboard.length === 0) {
         setShowDemoSetup(true);
+        setShowLeaderboard(false);
+      } else {
+        setShowDemoSetup(false);
+        setShowLeaderboard(true);
       }
     } catch (err) {
       setShowDemoSetup(true);
+      setShowLeaderboard(false);
     }
-  };
+  }, [challengeId]);
+
+  const checkForDataWithoutRedirect = useCallback(async (selectedChallengeId) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/challenges/${selectedChallengeId}/leaderboard`);
+      // Just return the data, don't change the view state
+      return response.data.leaderboard;
+    } catch (err) {
+      console.error('Error checking challenge data:', err);
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    // Fetch available challenges
+    fetchAvailableChallenges();
+  }, [fetchAvailableChallenges]);
+
+  useEffect(() => {
+    // Check for data on initial load
+    checkForData();
+  }, [checkForData]);
+
 
   const setupDemoData = async () => {
     setLoading(true);
@@ -135,13 +173,96 @@ function App() {
       await axios.post(`${API_BASE_URL}/challenges/demo-challenge-1/calculate-rankings`);
 
       setShowDemoSetup(false);
-      window.location.reload(); // Refresh to show the leaderboard
+      setShowLeaderboard(true);
     } catch (err) {
       setError('Failed to setup demo data: ' + (err.response?.data?.error || err.message));
       console.error('Demo setup error:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBackToHome = () => {
+    setShowLeaderboard(false);
+    setShowChallengeManagement(false);
+    setShowDemoSetup(true);
+  };
+
+  const handleScoreSubmitted = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleChallengeCreated = () => {
+    fetchAvailableChallenges(); // Refresh challenges list
+  };
+
+  const handleDeleteChallenge = async () => {
+    const challengeName = availableChallenges.find(c => c.challenge_id === challengeId)?.title || challengeId;
+    
+    if (!window.confirm(`Are you sure you want to delete the challenge "${challengeName}"? This will permanently delete the challenge and all its data. This action cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingChallenge(true);
+    setError(null);
+
+    try {
+      await axios.delete(`${API_BASE_URL}/challenges/${challengeId}`);
+      
+      // Refresh challenges list
+      await fetchAvailableChallenges();
+      
+      // If we deleted the current challenge, switch to the first available one or go to demo setup
+      if (availableChallenges.length <= 1) {
+        setShowLeaderboard(false);
+        setShowDemoSetup(true);
+      } else {
+        const remainingChallenges = availableChallenges.filter(c => c.challenge_id !== challengeId);
+        if (remainingChallenges.length > 0) {
+          setChallengeId(remainingChallenges[0].challenge_id);
+          setRefreshTrigger(prev => prev + 1);
+        }
+      }
+    } catch (err) {
+      setError('Failed to delete challenge: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setDeletingChallenge(false);
+    }
+  };
+
+  const handleChallengeSelect = (selectedChallengeId) => {
+    setChallengeId(selectedChallengeId);
+    setShowChallengeManagement(false);
+    setShowLeaderboard(true);
+  };
+
+  const handleChallengeChange = async (selectedChallengeId) => {
+    setChallengeId(selectedChallengeId);
+    setRefreshTrigger(prev => prev + 1); // Trigger leaderboard refresh
+    
+    // Ensure we stay on the leaderboard page when switching challenges
+    if (showLeaderboard) {
+      // We're already on the leaderboard, just update the challenge
+      return;
+    } else if (showChallengeManagement) {
+      // We're on challenge management, switch to leaderboard for the selected challenge
+      setShowChallengeManagement(false);
+      setShowLeaderboard(true);
+    } else {
+      // We're on demo setup, check if the selected challenge has data
+      const leaderboardData = await checkForDataWithoutRedirect(selectedChallengeId);
+      if (leaderboardData.length > 0) {
+        setShowDemoSetup(false);
+        setShowLeaderboard(true);
+      }
+      // If no data, stay on demo setup
+    }
+  };
+
+  const handleManageChallenges = () => {
+    setShowDemoSetup(false);
+    setShowLeaderboard(false);
+    setShowChallengeManagement(true);
   };
 
   return (
@@ -156,36 +277,21 @@ function App() {
           <div className="demo-setup">
             <div className="demo-setup-content">
               <h2>Welcome to EduVerse Leaderboard!</h2>
-              <p>This system processes AI-generated code scores and applies recruiter-defined grading criteria to create comprehensive leaderboards.</p>
+              <p>Create and manage coding challenges with AI-powered scoring and comprehensive leaderboards.</p>
               
-              <div className="features">
-                <h3>Key Features:</h3>
-                <ul>
-                  <li>✅ Weighted scoring algorithm with tie handling</li>
-                  <li>✅ Real-time leaderboard with search functionality</li>
-                  <li>✅ Top 3 highlighting with medal icons</li>
-                  <li>✅ Detailed score breakdowns by evaluation criteria</li>
-                  <li>✅ SQLite database persistence</li>
-                  <li>✅ RESTful API architecture</li>
-                </ul>
-                
-                <h3>Evaluation Criteria:</h3>
-                <ul>
-                  <li>📝 <strong>Code clarity & structure:</strong> 30%</li>
-                  <li>🧠 <strong>Correctness of computation logic:</strong> 25%</li>
-                  <li>🎨 <strong>API / UI design quality:</strong> 20%</li>
-                  <li>🔍 <strong>Handling of edge cases/scalability:</strong> 15%</li>
-                  <li>💡 <strong>Creativity / extra features:</strong> 10%</li>
-                </ul>
-              </div>
-
               <div className="demo-actions">
-                <button 
-                  onClick={setupDemoData} 
+                <button
+                  onClick={setupDemoData}
                   disabled={loading}
-                  className="setup-demo-button"
+                  className="demo-action-button setup-demo-button"
                 >
                   {loading ? 'Setting up demo...' : 'Setup Demo Data'}
+                </button>
+                <button
+                  onClick={handleManageChallenges}
+                  className="demo-action-button manage-challenges-button"
+                >
+                  Manage Challenges
                 </button>
               </div>
 
@@ -196,23 +302,53 @@ function App() {
               )}
             </div>
           </div>
-        ) : (
+        ) : showLeaderboard ? (
           <div className="leaderboard-section">
             <div className="challenge-selector">
-              <label htmlFor="challenge-select">Select Challenge:</label>
-              <select 
-                id="challenge-select"
-                value={challengeId} 
-                onChange={(e) => setChallengeId(e.target.value)}
-                className="challenge-select"
-              >
-                <option value="demo-challenge-1">Demo Challenge 1 - Algorithm Implementation</option>
-              </select>
+              <div className="challenge-controls">
+                <div className="challenge-dropdown">
+                  <label htmlFor="challenge-select">Select Challenge:</label>
+                  <select 
+                    id="challenge-select"
+                    value={challengeId} 
+                    onChange={(e) => handleChallengeChange(e.target.value)}
+                    className="challenge-select"
+                  >
+                    {availableChallenges.map((challenge) => (
+                      <option key={challenge.challenge_id} value={challenge.challenge_id}>
+                        {challenge.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button 
+                  onClick={handleDeleteChallenge}
+                  disabled={deletingChallenge}
+                  className="delete-challenge-button"
+                >
+                  {deletingChallenge ? 'Deleting...' : '🗑️ Delete Challenge'}
+                </button>
+              </div>
             </div>
             
-            <Leaderboard challengeId={challengeId} />
+            <ScoreSubmission 
+              challengeId={challengeId} 
+              onScoreSubmitted={handleScoreSubmitted}
+            />
+            
+            <Leaderboard 
+              challengeId={challengeId} 
+              onBack={handleBackToHome}
+              refreshTrigger={refreshTrigger}
+            />
           </div>
-        )}
+        ) : showChallengeManagement ? (
+          <ChallengeManagement 
+            onChallengeSelect={handleChallengeSelect}
+            onBack={handleBackToHome}
+            onChallengeCreated={handleChallengeCreated}
+          />
+        ) : null}
       </main>
 
       <footer className="App-footer">
