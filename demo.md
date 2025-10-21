@@ -67,7 +67,7 @@ The demo includes:
 - **Realistic score distributions** showing ranking logic
 - **Different challenge types** (algorithm, web dev, database)
 
-## 🚀 Live Demo URL
+## 🚀 Local Demo
 
-**GitHub Pages**: https://priyuh.github.io/eduverse-leaderboard
-*(Note: Frontend only - backend runs locally)*
+**Local Development**: http://localhost:3000
+*(Make sure both frontend and backend are running)*

@@ -204,17 +204,9 @@ eduverse-leaderboard/
 └── package.json          # Dependencies
 ```
 
-## 🚀 Production Deployment
+## 📈 Scaling for 10,000+ Users
 
-### Frontend (GitHub Pages)
-- **URL**: https://priyuh.github.io/eduverse-leaderboard
-- **Build**: `npm run build`
-- **Deploy**: `npm run deploy`
-
-### Backend (Supabase)
-- Database hosted on Supabase
-- Environment variables for production
-- Automatic scaling and backups
+For detailed information on how to scale this system for 10,000+ users, see the **SCALING_ANALYSIS.md** file in the root directory. This document covers microservices architecture, database optimization, caching strategies, and horizontal scaling approaches.
 
 ## 📊 Features
 
