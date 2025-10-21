@@ -1,0 +1,15 @@
+# Ignore server files (we're only deploying the client)
+server/
+*.db
+*.sqlite
+*.sqlite3
+
+# Ignore development files
+node_modules/
+.git/
+.DS_Store
+*.log
+
+# Ignore build artifacts that aren't needed
+build/
+dist/
