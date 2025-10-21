@@ -35,13 +35,14 @@ CREATE TABLE IF NOT EXISTS ai_scores (
   creativity_score REAL NOT NULL DEFAULT 0,
   submitted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   FOREIGN KEY (user_id) REFERENCES users (user_id),
-  FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id)
+  FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id),
+  UNIQUE(user_id, challenge_id)
 );
 
 -- Recruiter Criteria table
 CREATE TABLE IF NOT EXISTS recruiter_criteria (
   id SERIAL PRIMARY KEY,
-  challenge_id TEXT NOT NULL,
+  challenge_id TEXT UNIQUE NOT NULL,
   logic_weight REAL NOT NULL DEFAULT 0.25,
   clarity_weight REAL NOT NULL DEFAULT 0.30,
   testing_weight REAL NOT NULL DEFAULT 0.0,
@@ -70,7 +71,8 @@ CREATE TABLE IF NOT EXISTS final_rankings (
   creativity_contribution REAL NOT NULL DEFAULT 0,
   calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   FOREIGN KEY (user_id) REFERENCES users (user_id),
-  FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id)
+  FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id),
+  UNIQUE(user_id, challenge_id)
 );
 
 -- Create indexes for better performance

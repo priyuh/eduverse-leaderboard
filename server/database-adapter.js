@@ -64,7 +64,8 @@ class DatabaseAdapter {
             creativity_score REAL NOT NULL DEFAULT 0,
             submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (user_id),
-            FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id)
+            FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id),
+            UNIQUE(user_id, challenge_id)
           )
         `);
 
@@ -103,7 +104,8 @@ class DatabaseAdapter {
             creativity_contribution REAL NOT NULL DEFAULT 0,
             calculated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (user_id),
-            FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id)
+            FOREIGN KEY (challenge_id) REFERENCES challenges (challenge_id),
+            UNIQUE(user_id, challenge_id)
           )
         `);
       });
@@ -281,6 +283,40 @@ class DatabaseAdapter {
     }
   }
 
+  async getAllChallenges() {
+    try {
+      if (this.isProduction) {
+        // For production, get all challenges from the in-memory store
+        const challenges = [];
+        for (const [key, value] of this.db.entries()) {
+          if (key.startsWith('challenge_')) {
+            challenges.push(value);
+          }
+        }
+        return challenges;
+      } else {
+        return new Promise((resolve, reject) => {
+          this.db.all(
+            'SELECT * FROM challenges ORDER BY created_at DESC',
+            [],
+            (err, rows) => {
+              if (err) {
+                console.error('Database error in getAllChallenges:', err);
+                reject(err);
+              } else {
+                console.log('Retrieved challenges:', rows);
+                resolve(rows);
+              }
+            }
+          );
+        });
+      }
+    } catch (error) {
+      console.error('Error in getAllChallenges:', error);
+      throw error;
+    }
+  }
+
   async getLeaderboard(challengeId, limit = 100) {
     if (this.isProduction) {
       // For production, we need to simulate the complex join query
@@ -378,6 +414,87 @@ class DatabaseAdapter {
             else resolve(rows);
           }
         );
+      });
+    }
+  }
+
+  async deleteChallengeLeaderboard(challengeId) {
+    if (this.isProduction) {
+      // For production, remove all related data from in-memory store
+      for (const [key, value] of this.db.entries()) {
+        if (key.includes(`_${challengeId}`) || 
+            (value && value.challengeId === challengeId) ||
+            (value && value.challenge_id === challengeId)) {
+          this.db.delete(key);
+        }
+      }
+    } else {
+      return new Promise((resolve, reject) => {
+        this.db.serialize(() => {
+          // Delete from ai_scores
+          this.db.run('DELETE FROM ai_scores WHERE challenge_id = ?', [challengeId]);
+          
+          // Delete from final_rankings
+          this.db.run('DELETE FROM final_rankings WHERE challenge_id = ?', [challengeId]);
+          
+          resolve();
+        });
+      });
+    }
+  }
+
+  async deleteChallenge(challengeId) {
+    if (this.isProduction) {
+      // For production, remove all related data from in-memory store
+      for (const [key, value] of this.db.entries()) {
+        if (key.includes(`_${challengeId}`) || 
+            (value && value.challengeId === challengeId) ||
+            (value && value.challenge_id === challengeId)) {
+          this.db.delete(key);
+        }
+      }
+    } else {
+      return new Promise((resolve, reject) => {
+        this.db.serialize(() => {
+          // Delete from ai_scores
+          this.db.run('DELETE FROM ai_scores WHERE challenge_id = ?', [challengeId]);
+          
+          // Delete from final_rankings
+          this.db.run('DELETE FROM final_rankings WHERE challenge_id = ?', [challengeId]);
+          
+          // Delete from recruiter_criteria
+          this.db.run('DELETE FROM recruiter_criteria WHERE challenge_id = ?', [challengeId]);
+          
+          // Delete from challenges
+          this.db.run('DELETE FROM challenges WHERE challenge_id = ?', [challengeId]);
+          
+          resolve();
+        });
+      });
+    }
+  }
+
+  async deleteUserFromChallenge(challengeId, userId) {
+    if (this.isProduction) {
+      // For production, remove user data from in-memory store
+      for (const [key, value] of this.db.entries()) {
+        if (key.includes(`_${challengeId}_${userId}`) || 
+            (value && value.challengeId === challengeId && value.userId === userId) ||
+            (value && value.challenge_id === challengeId && value.user_id === userId)) {
+          this.db.delete(key);
+        }
+      }
+    } else {
+      return new Promise((resolve, reject) => {
+        this.db.serialize(() => {
+          // Delete from ai_scores
+          this.db.run('DELETE FROM ai_scores WHERE challenge_id = ? AND user_id = ?', [challengeId, userId]);
+          
+          // Delete from final_rankings
+          this.db.run('DELETE FROM final_rankings WHERE challenge_id = ? AND user_id = ?', [challengeId, userId]);
+          
+          resolve();
+        });
       });
     }
   }

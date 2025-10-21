@@ -359,6 +359,88 @@ class SupabaseAdapter {
     }
   }
 
+  async getAllChallenges() {
+    if (this.isProduction) {
+      const { data, error } = await this.supabase
+        .from('challenges')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    } else {
+      return await this.db.getAllChallenges();
+    }
+  }
+
+  async deleteChallengeLeaderboard(challengeId) {
+    if (this.isProduction) {
+      // Delete from ai_scores table
+      await this.supabase
+        .from('ai_scores')
+        .delete()
+        .eq('challenge_id', challengeId);
+      
+      // Delete from final_rankings table
+      await this.supabase
+        .from('final_rankings')
+        .delete()
+        .eq('challenge_id', challengeId);
+    } else {
+      return await this.db.deleteChallengeLeaderboard(challengeId);
+    }
+  }
+
+  async deleteChallenge(challengeId) {
+    if (this.isProduction) {
+      // Delete from ai_scores table
+      await this.supabase
+        .from('ai_scores')
+        .delete()
+        .eq('challenge_id', challengeId);
+      
+      // Delete from final_rankings table
+      await this.supabase
+        .from('final_rankings')
+        .delete()
+        .eq('challenge_id', challengeId);
+      
+      // Delete from recruiter_criteria table
+      await this.supabase
+        .from('recruiter_criteria')
+        .delete()
+        .eq('challenge_id', challengeId);
+      
+      // Delete from challenges table
+      await this.supabase
+        .from('challenges')
+        .delete()
+        .eq('challenge_id', challengeId);
+    } else {
+      return await this.db.deleteChallenge(challengeId);
+    }
+  }
+
+  async deleteUserFromChallenge(challengeId, userId) {
+    if (this.isProduction) {
+      // Delete from ai_scores table
+      await this.supabase
+        .from('ai_scores')
+        .delete()
+        .eq('challenge_id', challengeId)
+        .eq('user_id', userId);
+      
+      // Delete from final_rankings table
+      await this.supabase
+        .from('final_rankings')
+        .delete()
+        .eq('challenge_id', challengeId)
+        .eq('user_id', userId);
+    } else {
+      return await this.db.deleteUserFromChallenge(challengeId, userId);
+    }
+  }
+
   close() {
     if (!this.isProduction && this.db) {
       this.db.close();

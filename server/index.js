@@ -178,12 +178,51 @@ app.get('/api/challenges/:challengeId/users/:userId/ranking', async (req, res) =
 // Get all challenges
 app.get('/api/challenges', async (req, res) => {
   try {
-    // This would require a new method in Database class
-    // For now, return a simple response
-    res.json({ message: 'Challenges endpoint - implement as needed' });
+    console.log('Fetching challenges...');
+    console.log('Database instance:', typeof db);
+    console.log('getAllChallenges method:', typeof db.getAllChallenges);
+    const challenges = await db.getAllChallenges();
+    console.log('Retrieved challenges:', challenges);
+    res.json({ challenges });
   } catch (error) {
     console.error('Error fetching challenges:', error);
     res.status(500).json({ error: 'Failed to fetch challenges' });
+  }
+});
+
+// Delete all scores for a challenge (clear leaderboard)
+app.delete('/api/challenges/:challengeId/leaderboard', async (req, res) => {
+  try {
+    const { challengeId } = req.params;
+    await db.deleteChallengeLeaderboard(challengeId);
+    res.json({ message: 'Leaderboard cleared successfully' });
+  } catch (error) {
+    console.error('Error clearing leaderboard:', error);
+    res.status(500).json({ error: 'Failed to clear leaderboard' });
+  }
+});
+
+// Delete a challenge completely
+app.delete('/api/challenges/:challengeId', async (req, res) => {
+  try {
+    const { challengeId } = req.params;
+    await db.deleteChallenge(challengeId);
+    res.json({ message: 'Challenge deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting challenge:', error);
+    res.status(500).json({ error: 'Failed to delete challenge' });
+  }
+});
+
+// Delete a specific user from a challenge
+app.delete('/api/challenges/:challengeId/users/:userId', async (req, res) => {
+  try {
+    const { challengeId, userId } = req.params;
+    await db.deleteUserFromChallenge(challengeId, userId);
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
   }
 });
 
