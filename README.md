@@ -231,7 +231,3 @@ For detailed information on how to scale this system for 10,000+ users, see the 
 # Enable debug logging
 DEBUG=* npm start
 ```
-
-## 📝 License
-
-This project is part of the EduVerse coding challenge submission.
