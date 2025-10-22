@@ -19,13 +19,13 @@ A full-stack leaderboard application for managing coding challenges and tracking
 
 2. **Install dependencies**
    ```bash
-   # Install root dependencies
-   npm install
-   
-   # Install server dependencies
+   # Install server dependencies first
    cd server
    npm install
    cd ..
+   
+   # Install frontend dependencies
+   npm install
    ```
 
 3. **Set up environment variables**
