@@ -488,14 +488,161 @@ class DatabaseAdapter {
       return new Promise((resolve, reject) => {
         this.db.serialize(() => {
           // Delete from ai_scores
-          this.db.run('DELETE FROM ai_scores WHERE challenge_id = ? AND user_id = ?', [challengeId, userId]);
-          
-          // Delete from final_rankings
-          this.db.run('DELETE FROM final_rankings WHERE challenge_id = ? AND user_id = ?', [challengeId, userId]);
-          
-          resolve();
+          this.db.run('DELETE FROM ai_scores WHERE challenge_id = ? AND user_id = ?', [challengeId, userId], (err) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            
+            // Delete from final_rankings
+            this.db.run('DELETE FROM final_rankings WHERE challenge_id = ? AND user_id = ?', [challengeId, userId], (err) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              
+              // Recalculate rankings for all remaining users in this challenge
+              // this.recalculateRankingsSync(challengeId, resolve, reject);
+              resolve();
+            });
+          });
         });
       });
+    }
+  }
+
+  recalculateRankings(challengeId) {
+    if (this.isProduction) {
+      // For production, recalculate rankings in memory
+      const scores = [];
+      for (const [key, value] of this.db.entries()) {
+        if (key.startsWith(`ai_score_`) && value.challenge_id === challengeId) {
+          scores.push(value);
+        }
+      }
+      
+      // Sort by final_score descending
+      scores.sort((a, b) => b.final_score - a.final_score);
+      
+      // Update rankings
+      for (let i = 0; i < scores.length; i++) {
+        const newRank = i + 1;
+        const key = `final_ranking_${challengeId}_${scores[i].user_id}`;
+        this.db.set(key, {
+          ...scores[i],
+          rank: newRank
+        });
+      }
+    } else {
+      return new Promise((resolve, reject) => {
+        this.db.serialize(() => {
+          // Get all remaining scores for this challenge
+          this.db.all(
+            'SELECT * FROM ai_scores WHERE challenge_id = ? ORDER BY final_score DESC',
+            [challengeId],
+            (err, scores) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              
+              // Update rankings for all remaining users
+              let completed = 0;
+              const total = scores.length;
+              
+              if (total === 0) {
+                resolve();
+                return;
+              }
+              
+              scores.forEach((score, index) => {
+                const newRank = index + 1;
+                this.db.run(
+                  'UPDATE final_rankings SET rank = ? WHERE challenge_id = ? AND user_id = ?',
+                  [newRank, challengeId, score.user_id],
+                  (updateErr) => {
+                    if (updateErr) {
+                      reject(updateErr);
+                      return;
+                    }
+                    
+                    completed++;
+                    if (completed === total) {
+                      resolve();
+                    }
+                  }
+                );
+              });
+            }
+          );
+        });
+      });
+    }
+  }
+
+  recalculateRankingsSync(challengeId, resolve, reject) {
+    if (this.isProduction) {
+      // For production, recalculate rankings in memory
+      const scores = [];
+      for (const [key, value] of this.db.entries()) {
+        if (key.startsWith(`ai_score_`) && value.challenge_id === challengeId) {
+          scores.push(value);
+        }
+      }
+      
+      // Sort by final_score descending
+      scores.sort((a, b) => b.final_score - a.final_score);
+      
+      // Update rankings
+      for (let i = 0; i < scores.length; i++) {
+        const newRank = i + 1;
+        const key = `final_ranking_${challengeId}_${scores[i].user_id}`;
+        this.db.set(key, {
+          ...scores[i],
+          rank: newRank
+        });
+      }
+      resolve();
+    } else {
+      // Get all remaining scores for this challenge
+      this.db.all(
+        'SELECT * FROM ai_scores WHERE challenge_id = ? ORDER BY final_score DESC',
+        [challengeId],
+        (err, scores) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          // Update rankings for all remaining users
+          let completed = 0;
+          const total = scores.length;
+          
+          if (total === 0) {
+            resolve();
+            return;
+          }
+          
+          scores.forEach((score, index) => {
+            const newRank = index + 1;
+            this.db.run(
+              'UPDATE final_rankings SET rank = ? WHERE challenge_id = ? AND user_id = ?',
+              [newRank, challengeId, score.user_id],
+              (updateErr) => {
+                if (updateErr) {
+                  reject(updateErr);
+                  return;
+                }
+                
+                completed++;
+                if (completed === total) {
+                  resolve();
+                }
+              }
+            );
+          });
+        }
+      );
     }
   }
 

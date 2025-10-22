@@ -219,7 +219,39 @@ app.delete('/api/challenges/:challengeId/users/:userId', async (req, res) => {
   try {
     const { challengeId, userId } = req.params;
     await db.deleteUserFromChallenge(challengeId, userId);
-    res.json({ message: 'User deleted successfully' });
+    
+    // Recalculate rankings for remaining users using the same logic as calculate-rankings endpoint
+    const ScoreCalculator = require('./scoreCalculator');
+    
+    // Get recruiter criteria
+    const criteria = await db.getRecruiterCriteria(challengeId);
+    if (criteria) {
+      // Get all AI scores for the challenge
+      const aiScores = await db.getAllAIScores(challengeId);
+      if (aiScores.length > 0) {
+        // Calculate rankings
+        const rankings = ScoreCalculator.processChallengeScores(aiScores, criteria);
+        
+        // Save rankings to database
+        for (const ranking of rankings) {
+          await db.saveFinalRanking({
+            userId: ranking.userId,
+            challengeId: ranking.challengeId,
+            finalScore: ranking.finalScore,
+            rank: ranking.rank,
+            logicContribution: ranking.logicContribution,
+            clarityContribution: ranking.clarityContribution,
+            testingContribution: ranking.testingContribution,
+            efficiencyContribution: ranking.efficiencyContribution,
+            apiUiContribution: ranking.apiUiContribution,
+            edgeCasesContribution: ranking.edgeCasesContribution,
+            creativityContribution: ranking.creativityContribution
+          });
+        }
+      }
+    }
+    
+    res.json({ message: 'User deleted successfully and rankings updated' });
   } catch (error) {
     console.error('Error deleting user:', error);
     res.status(500).json({ error: 'Failed to delete user' });

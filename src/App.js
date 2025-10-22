@@ -63,9 +63,10 @@ function App() {
   }, [fetchAvailableChallenges]);
 
   useEffect(() => {
-    // Check for data on initial load
+    // Check for data on initial load only
     checkForData();
-  }, [checkForData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run on initial load
 
 
   const setupDemoData = async () => {

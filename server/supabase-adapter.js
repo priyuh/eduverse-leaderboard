@@ -436,8 +436,40 @@ class SupabaseAdapter {
         .delete()
         .eq('challenge_id', challengeId)
         .eq('user_id', userId);
+      
+      // Recalculate rankings for remaining users
+      await this.recalculateRankings(challengeId);
     } else {
       return await this.db.deleteUserFromChallenge(challengeId, userId);
+    }
+  }
+
+  async recalculateRankings(challengeId) {
+    if (this.isProduction) {
+      // Get all remaining scores for this challenge, ordered by final_score descending
+      const { data: scores, error } = await this.supabase
+        .from('ai_scores')
+        .select('*')
+        .eq('challenge_id', challengeId)
+        .order('final_score', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Update rankings for all remaining users
+      const updatePromises = scores.map((score, index) => {
+        const newRank = index + 1;
+        return this.supabase
+          .from('final_rankings')
+          .update({ rank: newRank })
+          .eq('challenge_id', challengeId)
+          .eq('user_id', score.user_id);
+      });
+      
+      await Promise.all(updatePromises);
+    } else {
+      return await this.db.recalculateRankings(challengeId);
     }
   }
 
